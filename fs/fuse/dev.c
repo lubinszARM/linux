@@ -2214,6 +2214,68 @@ static int fuse_device_clone(struct fuse_conn *fc, struct file *new)
 	return 0;
 }
 
+static int fuse_device_attach(struct fuse_conn *fc, struct file *filp)
+{
+	struct fuse_dev *fud;
+
+	fud = fuse_dev_alloc_install(fc);
+	if (!fud)
+		return -ENOMEM;
+
+	filp->private_data = fud;
+	atomic_inc(&fc->dev_count);
+
+	return 0;
+}
+
+static void fuse_invalidate_inodes(struct fuse_conn *fc)
+{
+	struct inode *inode, *next;
+	struct super_block *sb = fc->sb;
+	struct fuse_inode *fi;
+	u64 inodeid;
+
+	spin_lock(&sb->s_inode_list_lock);
+
+	list_for_each_entry_safe(inode, next, &sb->s_inodes, i_sb_list) {
+		spin_lock(&inode->i_lock);
+		inodeid = get_node_id(inode);
+		fi = get_fuse_inode(inode);
+		if (inodeid != FUSE_ROOT_ID) {
+			get_fuse_inode(inode)->nodeid = FUSE_INVALID_NODE_ID;
+		}
+		spin_unlock(&inode->i_lock);
+	}
+
+	spin_unlock(&sb->s_inode_list_lock);
+}
+
+static void fuse_recover_queue(struct fuse_dev *fud)
+{
+	struct fuse_iqueue *fiq = &fud->fc->iq;
+	struct fuse_pqueue *fpq = &fud->pq;
+	struct fuse_req *req, *next;
+	LIST_HEAD(recovery);
+	unsigned int i;
+
+	spin_lock(&fpq->lock);
+	for (i = 0; i < FUSE_PQ_HASH_SIZE; i++)
+		list_splice_tail_init(&fpq->processing[i], &recovery);
+	spin_unlock(&fpq->lock);
+
+	list_for_each_entry_safe(req, next, &recovery, list) {
+		clear_bit(FR_SENT, &req->flags);
+		set_bit(FR_PENDING, &req->flags);
+	}
+
+	spin_lock(&fiq->lock);
+	list_splice(&recovery, &fiq->pending);
+	spin_unlock(&fiq->lock);
+
+	fiq->connected = 1;
+	fud->fc->connected = 1;
+}
+
 static long fuse_dev_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long arg)
 {
@@ -2250,6 +2312,30 @@ static long fuse_dev_ioctl(struct file *file, unsigned int cmd,
 			}
 		}
 		break;
+       case FUSE_DEV_IOC_ATTACH:
+               res = -EFAULT;
+               if (!get_user(id, (__u32 __user *) arg)) {
+                       struct fuse_conn *old_fc = fuse_fc_restore(id);
+                       res = -EINVAL;
+
+                       if (old_fc) {
+                               mutex_lock(&fuse_mutex);
+                              /*
+                                * Alloc new fud for file(new fuse daemon)
+                                * add new fud to old fuse connection
+                                */
+                               res = fuse_device_attach(old_fc, file);
+                               fud = fuse_get_dev(file);
+                               fuse_recover_queue(fud);
+                               if (res >= 0) {
+                                       smp_mb();
+                                       fuse_invalidate_inodes(old_fc);
+                                       fuse_send_init(old_fc);
+                               }
+                               mutex_unlock(&fuse_mutex);
+                       }
+               }
+               break;		
 	case FUSE_DEV_IOC_SAVE_FC:
 		fud = fuse_get_dev(file);
 		res = fuse_fc_save(fud->fc);

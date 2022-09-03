@@ -212,6 +212,9 @@
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
 
+/** The node ID of the invalid inode */
+#define FUSE_INVALID_NODE_ID 0xFFFFFFFFFFFFFFFF
+
 /* Make sure all structures are padded to 64bit boundary, so 32bit
    userspace works under 64bit kernels */
 
@@ -871,6 +874,7 @@ struct fuse_notify_retrieve_in {
 /* Device ioctls: */
 #define FUSE_DEV_IOC_MAGIC	229
 #define FUSE_DEV_IOC_CLONE	_IOR(FUSE_DEV_IOC_MAGIC, 0, uint32_t)
+#define FUSE_DEV_IOC_ATTACH    _IOR(FUSE_DEV_IOC_MAGIC, 5, uint32_t)
 #define FUSE_DEV_IOC_SAVE_FC	_IOWR(FUSE_DEV_IOC_MAGIC, 7, uint32_t)
 #define FUSE_DEV_IOC_RESTORE_FC	_IOWR(FUSE_DEV_IOC_MAGIC, 8, uint32_t)
 #define FUSE_DEV_IOC_REMOVE_FC	_IOW(FUSE_DEV_IOC_MAGIC, 9, uint32_t)
