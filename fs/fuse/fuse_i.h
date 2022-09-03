@@ -1088,4 +1088,9 @@ unsigned int fuse_len_args(unsigned int numargs, struct fuse_arg *args);
 u64 fuse_get_unique(struct fuse_iqueue *fiq);
 void fuse_free_conn(struct fuse_conn *fc);
 
+/* fuse connection store management */
+int fuse_fc_save(struct fuse_conn *fc);
+struct fuse_conn *fuse_fc_restore(int id);
+void fuse_fc_remove(int id);
+
 #endif /* _FS_FUSE_I_H */

@@ -31,6 +31,8 @@ MODULE_LICENSE("GPL");
 static struct kmem_cache *fuse_inode_cachep;
 struct list_head fuse_conn_list;
 DEFINE_MUTEX(fuse_mutex);
+DEFINE_IDR(fuse_fc_store);
+DEFINE_MUTEX(fuse_fc_store_mutex);
 
 static int set_global_limit(const char *val, const struct kernel_param *kp);
 
@@ -1389,6 +1391,66 @@ static inline void unregister_fuseblk(void)
 }
 #endif
 
+int fuse_fc_save(struct fuse_conn *fc)
+{
+	int res = -EBADF;
+	fc = fuse_conn_get(fc);
+	if (!fc) {
+		pr_err("FUSE: invalid fuse connection to save.\n");
+		goto out;
+	}
+	idr_preload(GFP_KERNEL);
+	mutex_lock(&fuse_fc_store_mutex);
+	res = idr_alloc(&fuse_fc_store, fc, 1, 0, GFP_ATOMIC);
+	mutex_unlock(&fuse_fc_store_mutex);
+	idr_preload_end();
+	if (res < 0)
+		fuse_conn_put(fc);
+out:
+	return res;
+}
+
+static struct fuse_conn *do_fuse_fc_restore(int id)
+{
+	struct fuse_conn *fc;
+	mutex_lock(&fuse_fc_store_mutex);
+	fc = idr_find(&fuse_fc_store, id);
+	mutex_unlock(&fuse_fc_store_mutex);
+	return fc;
+}
+
+struct fuse_conn *fuse_fc_restore(int id)
+{
+	struct fuse_conn *fc;
+	fc = do_fuse_fc_restore(id);
+	if (!fc)
+		return NULL;
+	return fc;
+}
+
+void fuse_fc_remove(int id)
+{
+	struct fuse_conn *fc;
+	mutex_lock(&fuse_fc_store_mutex);
+	fc = idr_remove(&fuse_fc_store, id);
+	mutex_unlock(&fuse_fc_store_mutex);
+	if (fc)
+		fuse_conn_put(fc);
+}
+
+static int fuse_fc_free(int id, void *p, void *data)
+{
+	struct fuse_conn *fc = (struct fuse_conn *)p;
+	fuse_conn_put(fc);
+	return 0;
+}
+
+static void fuse_fc_store_cleanup(void)
+{
+	idr_for_each(&fuse_fc_store, &fuse_fc_free, NULL);
+	idr_destroy(&fuse_fc_store);
+}
+
 static void fuse_inode_init_once(void *foo)
 {
 	struct inode *inode = foo;
@@ -1512,6 +1574,7 @@ static void __exit fuse_exit(void)
 {
 	pr_debug("exit\n");
 
+	fuse_fc_store_cleanup();
 	fuse_ctl_cleanup();
 	fuse_sysfs_cleanup();
 	fuse_fs_cleanup();

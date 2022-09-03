@@ -2217,16 +2217,19 @@ static int fuse_device_clone(struct fuse_conn *fc, struct file *new)
 static long fuse_dev_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long arg)
 {
-	int err = -ENOTTY;
+	int res = -ENOTTY;
+	int fd;
+	int id;
+	struct fuse_dev *fud = NULL;
 
-	if (cmd == FUSE_DEV_IOC_CLONE) {
-		int oldfd;
+	if (_IOC_TYPE(cmd) != FUSE_DEV_IOC_MAGIC)
+		return -EINVAL;
 
-		err = -EFAULT;
-		if (!get_user(oldfd, (__u32 __user *) arg)) {
-			struct file *old = fget(oldfd);
-
-			err = -EINVAL;
+	switch (cmd) {
+	case FUSE_DEV_IOC_CLONE:
+		res = -EFAULT;
+		if (!get_user(fd, (__u32 __user *) arg)) {
+			struct file *old = fget(fd);
 			if (old) {
 				struct fuse_dev *fud = NULL;
 
@@ -2240,14 +2243,39 @@ static long fuse_dev_ioctl(struct file *file, unsigned int cmd,
 
 				if (fud) {
 					mutex_lock(&fuse_mutex);
-					err = fuse_device_clone(fud->fc, file);
+					res = fuse_device_clone(fud->fc, file);
 					mutex_unlock(&fuse_mutex);
 				}
 				fput(old);
 			}
 		}
+		break;
+	case FUSE_DEV_IOC_SAVE_FC:
+		fud = fuse_get_dev(file);
+		res = fuse_fc_save(fud->fc);
+		if (res > 0) {
+			res = put_user(res, (__u32 __user *) arg);
+		}
+		break;
+	case FUSE_DEV_IOC_RESTORE_FC:
+		if (!get_user(id, (__u32 __user *) arg)) {
+			struct fuse_conn *restored_fc = fuse_fc_restore(id);
+			/* return fc->connected status for observation in user space */
+			if (restored_fc)
+				res = put_user(restored_fc->connected, (__u32 __user *) arg);
+		}
+		break;
+	case FUSE_DEV_IOC_REMOVE_FC:
+		if (!get_user(id, (__u32 __user *) arg)) {
+			fuse_fc_remove(id);
+			res = 0;
+		}
+		break;
+	default:
+		res = -ENOTTY;
+		break;
 	}
-	return err;
+	return res;
 }
 
 const struct file_operations fuse_dev_operations = {
