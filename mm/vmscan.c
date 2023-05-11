@@ -6419,16 +6419,39 @@ static inline bool should_continue_reclaim(struct pglist_data *pgdat,
 	return inactive_lru_pages > pages_for_compaction;
 }
 
+int sysctl_offline_cgroup_priority_gap = 2;
+
+int offline_cgroup_priority_gap_sysctl_handler(struct ctl_table *table, int write,
+		void *buffer, size_t *length, loff_t *ppos)
+{
+	int rc;
+
+	rc = proc_dointvec_minmax(table, write, buffer, length, ppos);
+	if (rc)
+		return rc;
+
+	if (sysctl_offline_cgroup_priority_gap > DEF_PRIORITY)
+		sysctl_offline_cgroup_priority_gap = DEF_PRIORITY;
+
+	return 0;
+}
+
 static void shrink_node_memcgs(pg_data_t *pgdat, struct scan_control *sc)
 {
 	struct mem_cgroup *target_memcg = sc->target_mem_cgroup;
 	struct mem_cgroup *memcg;
+	s8 shrink_priority = sc->priority;
 
 	memcg = mem_cgroup_iter(target_memcg, NULL, NULL);
 	do {
 		struct lruvec *lruvec = mem_cgroup_lruvec(memcg, pgdat);
 		unsigned long reclaimed;
 		unsigned long scanned;
+
+		if (!mem_cgroup_online(memcg))
+			sc->priority = max(shrink_priority-sysctl_offline_cgroup_priority_gap, 0);
+		else
+			sc->priority = shrink_priority;
 
 		/*
 		 * This loop can become CPU-bound when target memcgs

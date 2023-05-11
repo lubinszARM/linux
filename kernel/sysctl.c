@@ -2161,6 +2161,14 @@ static struct ctl_table vm_table[] = {
 		.extra2		= SYSCTL_THREE_THOUSAND,
 	},
 	{
+		.procname       = "offline_cgroup_priority_gap",
+		.data		= &sysctl_offline_cgroup_priority_gap,
+		.maxlen		= sizeof(sysctl_offline_cgroup_priority_gap),
+		.mode		= 0644,
+		.proc_handler	= offline_cgroup_priority_gap_sysctl_handler,
+		.extra1		= SYSCTL_ZERO,
+	},
+	{
 		.procname	= "percpu_pagelist_high_fraction",
 		.data		= &percpu_pagelist_high_fraction,
 		.maxlen		= sizeof(percpu_pagelist_high_fraction),

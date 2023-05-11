@@ -3024,6 +3024,7 @@ extern void setup_per_cpu_pageset(void);
 extern int min_free_kbytes;
 extern int watermark_boost_factor;
 extern int watermark_scale_factor;
+extern int sysctl_offline_cgroup_priority_gap;
 
 /* nommu.c */
 extern atomic_long_t mmap_pages_allocated;

@@ -75,7 +75,7 @@ Currently, these files are in /proc/sys/vm:
 - watermark_boost_factor
 - watermark_scale_factor
 - zone_reclaim_mode
-
+- offline_cgroup_priority_gap
 
 admin_reserve_kbytes
 ====================
@@ -1005,6 +1005,36 @@ that the number of free pages kswapd maintains for latency reasons is
 too small for the allocation bursts occurring in the system. This knob
 can then be used to tune kswapd aggressiveness accordingly.
 
+offline_cgroup_priority_gap
+======================
+The offline_cgroup_priority_gap parameter is used to configure the gap
+or difference in priority levels between offline cgroups and online
+cgroups in the Linux kernel's memory management subsystem.
+
+DEF_PRIORITY is a constant value used in the virtual memory subsystem
+that represents the highest priority level for VM scanning.
+The value of DEF_PRIORITY is 12, indicating that during an aging round,
+approximately 1/4096th of the queues (LRUs) will be scanned.
+This priority level determines the amount of scanning performed
+on the LRU lists during memory reclamation.
+
+Each online cgroup within the memory cgroup hierarchy can have its own
+priority level specified through the priority parameter.
+This priority level determines the proportion of the LRU lists that
+will be scanned during memory reclamation for that specific cgroup.
+
+By setting a positive value for offline_cgroup_priority_gap,
+the priority of offline cgroups can be lowered compared to the
+priority of online cgroups.
+This ensures that offline cgroups are given lower priority during
+memory reclamation, allowing more aggressive reclamation for online cgroups.
+The exact effect will depend on the specific values of
+offline_cgroup_priority_gap, DEF_PRIORITY, and online_cgroup.priority.
+
+It's important to note that tuning these parameters should be done carefully,
+considering the memory management requirements and performance
+characteristics of the system, to ensure optimal memory utilization
+and system performance.
 
 zone_reclaim_mode
 =================
