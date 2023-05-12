@@ -363,6 +363,32 @@ static unsigned long global_dirtyable_memory(void)
 	return x + 1;	/* Ensure that we never return 0 */
 }
 
+#ifdef CONFIG_CGROUP_WRITEBACK
+int memcg_get_dirty_factor(struct task_struct *curr)
+{
+	struct mem_cgroup *memcg;
+	int val;
+
+	if (mem_cgroup_disabled())
+		return 0;
+
+	rcu_read_lock();
+	memcg = mem_cgroup_from_css(task_css(curr, memory_cgrp_id));
+	if (mem_cgroup_is_root(memcg))
+		val = 0;
+	else
+		val = memcg->dirty_factor;
+	rcu_read_unlock();
+
+	return val;
+}
+#else
+int memcg_get_dirty_factor(struct task_struct *curr)
+{
+	return 0;
+}
+#endif
+
 /**
  * domain_dirty_limits - calculate thresh and bg_thresh for a wb_domain
  * @dtc: dirty_throttle_control of interest
@@ -381,9 +407,15 @@ static void domain_dirty_limits(struct dirty_throttle_control *dtc)
 	/* convert ratios to per-PAGE_SIZE for higher precision */
 	unsigned long ratio = (vm_dirty_ratio * PAGE_SIZE) / 100;
 	unsigned long bg_ratio = (dirty_background_ratio * PAGE_SIZE) / 100;
+	unsigned long ratio_memcg_factor = memcg_get_dirty_factor(current);
 	unsigned long thresh;
 	unsigned long bg_thresh;
 	struct task_struct *tsk;
+
+	if (bytes)
+		bytes += (bytes * ratio_memcg_factor) / 100;
+	else
+		ratio += (ratio * ratio_memcg_factor) / 100;
 
 	/* gdtc is !NULL iff @dtc is for memcg domain */
 	if (gdtc) {

@@ -311,6 +311,13 @@ struct mem_cgroup {
 	struct list_head cgwb_list;
 	struct wb_domain cgwb_domain;
 	struct memcg_cgwb_frn cgwb_frn[MEMCG_CGWB_FRN_CNT];
+
+	/*
+	* The dirty factor for adjusting the vm.dirty_ratio & vm.dirty_bytes
+	 * for this specific cgroup. This value represents a percentage
+	 * increase in the base threshold.
+	*/
+	int dirty_factor;
 #endif
 
 	/* List of events which userspace want to receive */

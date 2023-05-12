@@ -4794,6 +4794,28 @@ void mem_cgroup_flush_foreign(struct bdi_writeback *wb)
 	}
 }
 
+static int mem_cgroup_dirty_factor_read(struct seq_file *sf, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_seq(sf);
+
+	seq_printf(sf, "%d\n", memcg->dirty_factor);
+
+	return 0;
+}
+
+static int mem_cgroup_dirty_factor_write(struct cgroup_subsys_state *css,
+	struct cftype *cft, u64 val)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	/* cannot set to root cgroup */
+	if (mem_cgroup_is_root(memcg) || !((val >= *(int *)SYSCTL_ZERO ) && (val <= *(int *)SYSCTL_ONE_THOUSAND)))
+		return -EINVAL;
+
+	memcg->dirty_factor = val;
+
+	return 0;
+}
 #else	/* CONFIG_CGROUP_WRITEBACK */
 
 static int memcg_wb_domain_init(struct mem_cgroup *memcg, gfp_t gfp)
@@ -6821,6 +6843,14 @@ static struct cftype memory_files[] = {
 		.flags = CFTYPE_NS_DELEGATABLE,
 		.write = memory_reclaim,
 	},
+#ifdef CONFIG_CGROUP_WRITEBACK
+	{
+		.name = "reclaim.dirty_factor",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = mem_cgroup_dirty_factor_read,
+		.write_u64 = mem_cgroup_dirty_factor_write,
+	},
+#endif
 	{ }	/* terminate */
 };
 
