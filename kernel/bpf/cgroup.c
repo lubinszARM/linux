@@ -1657,6 +1657,96 @@ const struct bpf_verifier_ops cg_dev_verifier_ops = {
 	.is_valid_access	= cgroup_dev_is_valid_access,
 };
 
+int __cgroup_bpf_check_sockmem_reclaim(enum cgroup_bpf_attach_type atype)
+{
+	struct cgroup *cgrp;
+	struct bpf_sockmem ctx = {
+		.reclaim_mode = false,
+	};
+	int reclaim = 0;
+
+	rcu_read_lock();
+	cgrp = task_dfl_cgroup(current);
+	reclaim = bpf_prog_run_array_cg(&cgrp->bpf, atype, &ctx, bpf_prog_run, 0,
+				    NULL);
+	rcu_read_unlock();
+
+	return reclaim;
+}
+EXPORT_SYMBOL(__cgroup_bpf_check_sockmem_reclaim);
+
+static const struct bpf_func_proto *
+sockmem_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+{
+        const struct bpf_func_proto *func_proto;
+
+        func_proto = cgroup_common_func_proto(func_id, prog);
+        if (func_proto)
+                return func_proto;
+
+        func_proto = cgroup_current_func_proto(func_id, prog);
+        if (func_proto)
+                return func_proto;
+
+        switch (func_id) {
+        case BPF_FUNC_sockmem_get_reclaim_mode:
+                return &bpf_sockmem_get_reclaim_mode_proto;
+        case BPF_FUNC_sockmem_set_reclaim_mode:
+                return &bpf_sockmem_set_reclaim_mode_proto;
+        default:
+                return bpf_base_func_proto(func_id);
+        }
+}
+
+static bool sockmem_is_valid_access(int off, int size, enum bpf_access_type type,
+                                  const struct bpf_prog *prog,
+                                  struct bpf_insn_access_aux *info)
+{
+       const int size_default = sizeof(__u32);
+
+       if (off < 0 || off + size > sizeof(struct bpf_sockmem) ||
+           off % size || type != BPF_READ)
+               return false;
+
+       switch (off) {
+       case offsetof(struct bpf_sockmem, reclaim_mode):
+               bpf_ctx_record_field_size(info, size_default);
+               return bpf_ctx_narrow_access_ok(off, size, size_default);
+       default:
+               return false;
+       }
+}
+
+static u32 sockmem_convert_ctx_access(enum bpf_access_type type,
+                                    const struct bpf_insn *si,
+                                    struct bpf_insn *insn_buf,
+                                    struct bpf_prog *prog, u32 *target_size)
+{
+       struct bpf_insn *insn = insn_buf;
+
+       switch (si->off) {
+       case offsetof(struct bpf_sysctl, reclaim_mode):
+               *insn++ = BPF_LDX_MEM(
+                       BPF_SIZE(si->code), si->dst_reg, si->src_reg,
+                       bpf_target_off(struct bpf_sockmem, reclaim_mode,
+                                      FIELD_SIZEOF(struct bpf_sockmem,
+                                                   reclaim_mode),
+                                      target_size));
+               break;
+       }
+
+       return insn - insn_buf;
+}
+
+const struct bpf_prog_ops cg_sockmem_prog_ops = {
+};
+
+const struct bpf_verifier_ops cg_sockmem_verifier_ops = {
+	.get_func_proto	= cgroup_sockmem_func_proto,
+	.is_valid_access	= cgroup_sockmem_can_reclaim,
+	.convert_ctx_access	= cgroup_sockmem_convert_ctx_access,
+};
+
 /**
  * __cgroup_bpf_run_filter_sysctl - Run a program on sysctl
  *

@@ -67,6 +67,7 @@
 #include "internal.h"
 #include <net/sock.h>
 #include <net/ip.h>
+#include <linux/bpf-cgroup.h>
 #include "slab.h"
 #include "swap.h"
 
@@ -7301,6 +7302,11 @@ bool mem_cgroup_charge_skmem(struct mem_cgroup *memcg, unsigned int nr_pages,
 			return true;
 		}
 		return false;
+	}
+
+	if (in_softirq()) {
+		if(BPF_CGROUP_SOCKMEM_ALLOW_BLOCKING())
+			gfp_mask = GFP_NOWAIT;
 	}
 
 	if (try_charge(memcg, gfp_mask, nr_pages) == 0) {

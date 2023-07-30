@@ -53,6 +53,7 @@ to_cgroup_bpf_attach_type(enum bpf_attach_type attach_type)
 	CGROUP_ATYPE(CGROUP_UDP4_SENDMSG);
 	CGROUP_ATYPE(CGROUP_UDP6_SENDMSG);
 	CGROUP_ATYPE(CGROUP_SYSCTL);
+	CGROUP_ATYPE(CGROUP_SOCKMEM);
 	CGROUP_ATYPE(CGROUP_UDP4_RECVMSG);
 	CGROUP_ATYPE(CGROUP_UDP6_RECVMSG);
 	CGROUP_ATYPE(CGROUP_GETSOCKOPT);
@@ -322,6 +323,14 @@ static inline bool cgroup_bpf_sock_enabled(struct sock *sk,
 		__ret = __cgroup_bpf_run_filter_sock_ops(sk,		\
 							 sock_ops,	\
 							 CGROUP_SOCK_OPS); \
+	__ret;								\
+})
+
+#define BPF_CGROUP_SOCKMEM_ALLOW_BLOCKING()				\
+({									\
+	bool __ret = false;						\
+	if (cgroup_bpf_enabled(CGROUP_SOCKMEM))				\									\
+		__ret = __cgroup_bpf_check_sockmem_reclaim(CGROUP_SOCKMEM); \
 	__ret;								\
 })
 

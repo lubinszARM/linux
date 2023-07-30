@@ -295,6 +295,7 @@ union bpf_iter_link_info {
  *		**BPF_PROG_TYPE_CGROUP_SOCK_ADDR**,
  *		**BPF_PROG_TYPE_CGROUP_SOCKOPT**,
  *		**BPF_PROG_TYPE_CGROUP_SYSCTL**,
+ *		**BPF_PROG_TYPE_CGROUP_SOCKMEM**,
  *		**BPF_PROG_TYPE_SOCK_OPS**
  *
  *			Control Group v2 hierarchy with the eBPF controller
@@ -443,6 +444,7 @@ union bpf_iter_link_info {
  *		**BPF_PROG_TYPE_CGROUP_SOCK_ADDR**,
  *		**BPF_PROG_TYPE_CGROUP_SOCKOPT**,
  *		**BPF_PROG_TYPE_CGROUP_SYSCTL**,
+ *		**BPF_PROG_TYPE_CGROUP_SOCKMEM**,
  *		**BPF_PROG_TYPE_SOCK_OPS**
  *
  *			Control Group v2 hierarchy with the eBPF controller
@@ -978,6 +980,7 @@ enum bpf_prog_type {
 	BPF_PROG_TYPE_SK_REUSEPORT,
 	BPF_PROG_TYPE_FLOW_DISSECTOR,
 	BPF_PROG_TYPE_CGROUP_SYSCTL,
+	BPF_PROG_TYPE_CGROUP_SOCKMEM,
 	BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
 	BPF_PROG_TYPE_CGROUP_SOCKOPT,
 	BPF_PROG_TYPE_TRACING,
@@ -1009,6 +1012,7 @@ enum bpf_attach_type {
 	BPF_LIRC_MODE2,
 	BPF_FLOW_DISSECTOR,
 	BPF_CGROUP_SYSCTL,
+	BPF_CGROUP_SOCKMEM,
 	BPF_CGROUP_UDP4_RECVMSG,
 	BPF_CGROUP_UDP6_RECVMSG,
 	BPF_CGROUP_GETSOCKOPT,
@@ -5787,6 +5791,8 @@ union bpf_attr {
 	FN(user_ringbuf_drain, 209, ##ctx)		\
 	FN(cgrp_storage_get, 210, ##ctx)		\
 	FN(cgrp_storage_delete, 211, ##ctx)		\
+	FN(cgrp_sockmem_get_reclaim_mode, 212, ##ctx)	\
+	FN(cgrp_sockmem_set_reclaim_mode, 213, ##ctx)   \
 	/* */
 
 /* backwards-compatibility macros for users of __BPF_FUNC_MAPPER that don't
@@ -7036,6 +7042,10 @@ struct bpf_sysctl {
 	__u32	file_pos;	/* Sysctl file position to read from, write to.
 				 * Allows 1,2,4-byte read an 4-byte write.
 				 */
+};
+
+struct bpf_sockmem {
+	__u32	reclaim_mode;
 };
 
 struct bpf_sockopt {
