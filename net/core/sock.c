@@ -2958,6 +2958,25 @@ int sk_wait_data(struct sock *sk, long *timeo, const struct sk_buff *skb)
 }
 EXPORT_SYMBOL(sk_wait_data);
 
+enum {
+	NO_BPF_POLICY,
+	BPF_SOCKMEM_PRESSURE,
+};
+
+__weak noinline int bpf_sockmem_cg_policy(struct sock *sk)
+{
+	return NO_BPF_POLICY;
+}
+
+BTF_SET8_START(sockmem_cg_bpf_fmodret_ids)
+BTF_ID_FLAGS(func, bpf_sockmem_cg_policy)
+BTF_SET8_END(sockmem_cg_bpf_fmodret_ids)
+
+static const struct btf_kfunc_id_set sockmem_cg_bpf_fmodret_set = {
+	.owner = THIS_MODULE,
+	.set   = &sockmem_cg_bpf_fmodret_ids,
+};
+
 /**
  *	__sk_mem_raise_allocated - increase memory_allocated
  *	@sk: socket
@@ -2973,12 +2992,21 @@ int __sk_mem_raise_allocated(struct sock *sk, int size, int amt, int kind)
 	struct proto *prot = sk->sk_prot;
 	bool charged = true;
 	long allocated;
+	gfp_t gfp_flags = gfp_memcg_charge();
 
 	sk_memory_allocated_add(sk, amt);
 	allocated = sk_memory_allocated(sk);
+
+	switch (bpf_sockmem_cg_policy(sk)) {
+		case BPF_SOCKMEM_PRESSURE: 
+			gfp_flags = in_softirq() ? GFP_NOWAIT : GFP_KERNEL;
+		default:
+			break;
+	}
+
 	if (memcg_charge &&
 	    !(charged = mem_cgroup_charge_skmem(sk->sk_memcg, amt,
-						gfp_memcg_charge())))
+						gfp_flags)))
 		goto suppress_allocation;
 
 	/* Under limit. */
@@ -4075,6 +4103,11 @@ static __net_initdata struct pernet_operations proto_net_ops = {
 
 static int __init proto_init(void)
 {
+	int err;
+	err = register_btf_fmodret_id_set(&sockmem_cg_bpf_fmodret_set);
+	if (err)
+		pr_warn("error while registering sockmem_cg fmodret entrypoints: %d", err);
+
 	return register_pernet_subsys(&proto_net_ops);
 }
 
